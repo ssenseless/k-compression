@@ -34,7 +34,10 @@ def compute_centroids(data, idx, k):
                 count += 1
                 centroid_val += data[j]
 
-        centroids[i] = centroid_val / count
+        if count == 0:
+            centroids[i] = 0
+        else:
+            centroids[i] = centroid_val / count
 
     return centroids
 
@@ -69,7 +72,7 @@ def processImage(image, is_jpg, k):
             data=processing_reshape,
             k=k
         ),
-        max_iters=2
+        max_iters=5
     )
 
     idx = find_closest_centroids(processing_reshape, centroids)
