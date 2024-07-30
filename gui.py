@@ -1,86 +1,10 @@
-import numpy as np
 from tkinter import *
 from tkinter import filedialog
 from PIL import Image, ImageTk
+from kmeans import processImage
 
 
 # defs
-def find_closest_centroids(data, centroids):
-    # todo: probably vectorize this too
-    k = centroids.shape[0]
-    idx = np.zeros(data.shape[0], dtype=int)
-
-    for i in range(data.shape[0]):
-        distance = []
-        for j in range(k):
-            norm_ij = np.linalg.norm(data[i] - centroids[j])
-            distance.append(norm_ij)
-
-        idx[i] = np.argmin(distance)
-
-    return idx
-
-
-def compute_centroids(data, idx, k):
-    # todo: vectorize this pls
-    m, n = data.shape
-    centroids = np.zeros((k, n))
-
-    for i in range(k):
-        count = 0
-        centroid_val = 0
-        for j in range(m):
-            if idx[j] == i:
-                count += 1
-                centroid_val += data[j]
-
-        if count == 0:
-            centroids[i] = 0
-        else:
-            centroids[i] = centroid_val / count
-
-    return centroids
-
-
-def find_k_means(data, initial_centroids, max_iters=10):
-    m, n = data.shape
-    k = initial_centroids.shape[0]
-    centroids = initial_centroids
-    idx = np.zeros(m)
-
-    for i in range(max_iters):
-        idx = find_closest_centroids(data, centroids)
-        centroids = compute_centroids(data, idx, k)
-
-    return centroids, idx
-
-
-def initialize_rand_centroids(data, k):
-    return data[np.random.permutation(data.shape[0])[:k]]
-
-
-def processImage(image, is_jpg, k):
-    processing = np.array(image)
-
-    if is_jpg:
-        processing = processing / 255
-
-    processing_reshape = np.reshape(processing, (processing.shape[0] * processing.shape[1], 3))
-    centroids, idx = find_k_means(
-        data=processing_reshape,
-        initial_centroids=initialize_rand_centroids(
-            data=processing_reshape,
-            k=k
-        ),
-        max_iters=5
-    )
-
-    idx = find_closest_centroids(processing_reshape, centroids)
-    processed = Image.fromarray(np.uint8(np.reshape(centroids[idx, :], processing.shape) * 255))
-
-    return processed, centroids
-
-
 def choose_file():
     global filename
     filename = filedialog.askopenfilename(
@@ -105,54 +29,102 @@ def compress():
     elif k == 0:
         flavor_text.set('Color number must be greater than zero')
     else:
+        global pillow_image_postcompress
+
         choice = Image.open(fp=filename).resize(size=(300, 300))
+        compressed, centroids = processImage(choice, filename[-3:] == 'jpg', k)
+
         choice_tk = ImageTk.PhotoImage(choice)
         precompress_frame.config(image=choice_tk)
         precompress_frame.image = choice_tk
 
-        compressed, centroids = processImage(choice, filename[-3:] == 'jpg', k)
-        compressed_tk = ImageTk.PhotoImage(compressed)
+        compressed_tk = ImageTk.PhotoImage(Image.fromarray(compressed))
         postcompress_frame.config(image=compressed_tk)
         postcompress_frame.image = compressed_tk
+        pillow_image_postcompress = Image.fromarray(compressed).resize((1000, 1000))
+
+        count = 0
+        for centroid in centroids:
+            if count > 5:
+                break
+
+            centroid_color = ImageTk.PhotoImage(
+                Image.new(
+                    mode='RGB',
+                    size=(50, 50),
+                    color=tuple(centroid)
+                )
+            )
+            color_boxes[count].config(image=centroid_color)
+            color_boxes[count].image = centroid_color
+            color_texts[count].set(f"#{centroid[0]:02x}{centroid[1]:02x}{centroid[2]:02x}")
+
+            count += 1
 
 
-# globals
+def save():
+    path = filedialog.asksaveasfilename(
+        initialdir='/',
+        title='Select a save location',
+        confirmoverwrite=False,
+        filetypes=[
+            ('Image files', '.jpg')
+        ]
+    )
+    if path == '':
+        flavor_text.set("Must select directory location")
+    else:
+        pillow_image_postcompress.save(path + '.jpg')
+        flavor_text.set("Saved!")
+
+
+# globals ------------------------------------------------------------------------------------
 back_col = '#343434'
 filename = ''
 
-# simple initializers
+# simple initializers ------------------------------------------------------------------------
 root = Tk()
 root.title('k-means image compression')
 root.config(bg=back_col)
 root.geometry('1000x600')
 
-# pillowo
-image_precompress = Image.new(
+# pillowo ------------------------------------------------------------------------------------
+image_precompress = ImageTk.PhotoImage(
+    Image.new(
+        mode='RGB',
+        size=(300, 300),
+        color=(200, 200, 200)
+    )
+)
+pillow_image_postcompress = Image.new(
     mode='RGB',
     size=(300, 300),
     color=(200, 200, 200)
 )
-precompress_tk = ImageTk.PhotoImage(image_precompress)
+image_postcompress = ImageTk.PhotoImage(pillow_image_postcompress)
 
-image_postcompress = Image.new(
-    mode='RGB',
-    size=(300, 300),
-    color=(200, 200, 200)
-)
-postcompress_tk = ImageTk.PhotoImage(image_postcompress)
+precompress_frame = Label(image=image_precompress)
+postcompress_frame = Label(image=image_postcompress)
 
-precompress_frame = Label(image=precompress_tk)
-postcompress_frame = Label(image=postcompress_tk)
+image_colors = [
+    ImageTk.PhotoImage(
+        Image.new(
+            mode='RGB',
+            size=(50, 50),
+            color=(200, 200, 200)
+        )
+    )
+    for _ in range(6)
+]
+color_boxes = [Label(image=image_colors[i]) for i in range(6)]
 
-# component initializers
-flavor_text = StringVar()
-flavor_text_label = Label(
+# component initializers ---------------------------------------------------------------------
+# labels for images
+save_image = Button(
     root,
-    bg=back_col,
-    textvariable=flavor_text
+    text="Save compressed image",
+    command=save
 )
-flavor_text.set('Select an image below to get started')
-
 immutable1 = Label(
     root,
     bg=back_col,
@@ -166,17 +138,23 @@ immutable2 = Label(
     font=('Arial', 7)
 )
 
-image_label = Label(
+# helper text for user
+flavor_text = StringVar()
+flavor_text_label = Label(
     root,
     bg=back_col,
-    text='Select image',
+    textvariable=flavor_text
 )
+flavor_text.set('Select an image below to get started')
+
+# button to select image
 image_button = Button(
     root,
     text='Browse Files',
     command=choose_file
 )
 
+# input box and button to choose k for k-means
 k_input = IntVar()
 k_input_entry = Entry(
     root,
@@ -188,21 +166,53 @@ confirm_button = Button(
     command=compress
 )
 
-# grid
-precompress_frame.grid(column=1, row=0, columnspan=2, padx=5, pady=(5, 0))
-postcompress_frame.grid(column=3, row=0, columnspan=2, padx=5, pady=(5, 0))
+# color boxes to show user (up to) 6 colors in photo
+# todo: maybe make this scroll to match user k
+color_box_label = Label(
+    root,
+    bg=back_col,
+    text='Colors',
+    font=('Arial', 10)
+)
+color_texts = [StringVar() for _ in range(6)]
+color_text_labels = [
+    Label(
+        root,
+        bg=back_col,
+        textvariable=color_texts[i]
+    )
+    for i in range(6)
+]
 
-immutable1.grid(column=1, row=1, columnspan=2, padx=5)
-immutable2.grid(column=3, row=1, columnspan=2, padx=5)
+# grid ---------------------------------------------------------------------------------------
+# images
+precompress_frame.grid(column=1, row=0, columnspan=3, padx=5, pady=(5, 0))
+postcompress_frame.grid(column=4, row=0, columnspan=3, padx=5, pady=(5, 0))
+save_image.grid(column=7, row=0)
 
-flavor_text_label.grid(column=1, row=2, columnspan=4, pady=3)
+# image labels
+immutable1.grid(column=1, row=1, columnspan=3, padx=5)
+immutable2.grid(column=4, row=1, columnspan=3, padx=5)
 
-image_button.grid(column=1, row=3, columnspan=4, pady=5)
+# user helper text
+flavor_text_label.grid(column=1, row=2, columnspan=6, pady=3)
 
-k_input_entry.grid(column=1, row=4, columnspan=2, sticky='e', pady=5, padx=(0, 5))
-confirm_button.grid(column=3, row=4, columnspan=2, sticky='w', pady=5, padx=(5, 0))
+# image selection button
+image_button.grid(column=1, row=3, columnspan=6, pady=5)
 
-root.grid_columnconfigure((0, 5), weight=1)
+# user input k
+k_input_entry.grid(column=1, row=4, columnspan=3, sticky='e', pady=5, padx=(0, 5))
+confirm_button.grid(column=4, row=4, columnspan=3, sticky='w', pady=5, padx=(5, 0))
+
+# color boxes
+color_box_label.grid(column=1, row=5, columnspan=6, pady=(1, 4))
+for i in range(6):
+    color_boxes[i].grid(column=i + 1, row=6)
+    color_text_labels[i].grid(column=i + 1, row=7)
+
+
+# spacing on outsides
+root.grid_columnconfigure((0, 7), weight=1)
 
 
 if __name__ == "__main__":
