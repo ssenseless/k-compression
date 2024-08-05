@@ -1,52 +1,58 @@
+import time
 import numpy as np
 
-#defs
+
+# defs
+def timer(f, comment="not given"):
+    a = time.time()
+    retval = f()
+    b = time.time()
+
+    print(f"Time difference (Func: {comment}): {round(b - a, 6)} sec.")
+    return retval
+
+
 def find_closest_centroids(data, centroids):
-    # todo: probably vectorize this too
-    k = centroids.shape[0]
-    idx = np.zeros(data.shape[0], dtype=int)
-
-    for i in range(data.shape[0]):
-        distance = []
-        for j in range(k):
-            norm_ij = np.linalg.norm(data[i] - centroids[j])
-            distance.append(norm_ij)
-
-        idx[i] = np.argmin(distance)
-
-    return idx
+    return np.argmin(
+        np.linalg.norm(
+            np.tile(
+                A=data[..., None],
+                reps=centroids.shape[0]
+            ) - centroids.T,
+            axis=1
+        ),
+        axis=1
+    )
 
 
 def compute_centroids(data, idx, k):
-    # todo: vectorize this pls
     m, n = data.shape
     centroids = np.zeros((k, n))
+    unique, counts = np.unique(idx, return_counts=True)
+    counts = dict(zip(unique, counts))
 
-    for i in range(k):
-        count = 0
-        centroid_val = 0
-        for j in range(m):
-            if idx[j] == i:
-                count += 1
-                centroid_val += data[j]
+    for i in range(m):
+        centroids[idx[i]] += data[i]
 
-        if count == 0:
-            centroids[i] = 0
-        else:
-            centroids[i] = centroid_val / count
+    missing_centroid = 0
+    for index in unique:
+        while missing_centroid != index:
+            centroids[missing_centroid] = 0
+            missing_centroid += 1
+        centroids[index] /= counts[index]
+        missing_centroid += 1
+
 
     return centroids
 
 
 def find_k_means(data, initial_centroids, max_iters=10):
-    m, n = data.shape
-    k = initial_centroids.shape[0]
+    idx = np.zeros(data.shape[0])
     centroids = initial_centroids
-    idx = np.zeros(m)
 
     for i in range(max_iters):
         idx = find_closest_centroids(data, centroids)
-        centroids = compute_centroids(data, idx, k)
+        compute_centroids(data=data, idx=idx, k=initial_centroids.shape[0])
 
     return centroids, idx
 
@@ -55,7 +61,7 @@ def initialize_rand_centroids(data, k):
     return data[np.random.permutation(data.shape[0])[:k]]
 
 
-def processImage(image, is_jpg, k):
+def process_image(image, is_jpg, k):
     processing = np.array(image)
 
     if is_jpg:

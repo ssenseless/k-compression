@@ -1,7 +1,7 @@
 from tkinter import *
 from tkinter import filedialog
 from PIL import Image, ImageTk
-from kmeans import processImage
+from kmeans import process_image, timer
 
 
 # defs
@@ -32,7 +32,7 @@ def compress():
         global pillow_image_postcompress
 
         choice = Image.open(fp=filename).resize(size=(300, 300))
-        compressed, centroids = processImage(choice, filename[-3:] == 'jpg', k)
+        compressed, centroids = process_image(choice, filename[-3:] == 'jpg', k)
 
         choice_tk = ImageTk.PhotoImage(choice)
         precompress_frame.config(image=choice_tk)
