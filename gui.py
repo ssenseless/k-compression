@@ -1,7 +1,7 @@
 from tkinter import *
 from tkinter import filedialog
 from PIL import Image, ImageTk
-from kmeans import process_image, timer
+from kmeans import process_image
 
 
 # defs
@@ -22,6 +22,55 @@ def choose_file():
         flavor_text.set('Must select either .png or .jpg')
 
 
+def resize_image():
+    unaltered = Image.open(fp=filename)
+    aspect = 300 / max(unaltered.height, unaltered.width)
+
+    return unaltered.resize(
+        size=(
+            int(unaltered.width * aspect),
+            int(unaltered.height * aspect)
+        )
+    )
+
+def reset_colors():
+    for i in range(6):
+        reset_image = ImageTk.PhotoImage(
+            Image.new(
+                mode='RGB',
+                size=(50, 50),
+                color=(200, 200, 200)
+            )
+        )
+        color_boxes[i].config(image=reset_image)
+        color_boxes[i].image = reset_image
+        color_texts[i].set("")
+
+        percent_texts[i].set("")
+
+
+def set_colors(centroids, percents, k):
+    for ix, centroid in enumerate(centroids):
+        centroid_color = ImageTk.PhotoImage(
+            Image.new(
+                mode='RGB',
+                size=(50, 50),
+                color=tuple(centroid)
+            )
+        )
+        color_boxes[ix].config(image=centroid_color)
+        color_boxes[ix].image = centroid_color
+        color_texts[ix].set(f"#{centroid[0]:02x}{centroid[1]:02x}{centroid[2]:02x}")
+
+        percent_texts[ix].set(f"{round(percents[ix], 2)}%")
+
+    if k > 6:
+        remaining_explain.set(f"Remaining {k - 6} colors")
+    else:
+        remaining_explain.set(f"Remaining 0 colors")
+    remaining_percent.set(f"{round(100 - sum(percents), 2)}%")
+
+
 def compress():
     k = k_input.get()
     if filename == '':
@@ -31,8 +80,8 @@ def compress():
     else:
         global pillow_image_postcompress
 
-        choice = Image.open(fp=filename).resize(size=(300, 300))
-        compressed, centroids = process_image(choice, filename[-3:] == 'jpg', k)
+        choice = resize_image()
+        compressed, centroids, percents = process_image(choice, filename[-3:] == 'jpg', k)
 
         choice_tk = ImageTk.PhotoImage(choice)
         precompress_frame.config(image=choice_tk)
@@ -43,23 +92,8 @@ def compress():
         postcompress_frame.image = compressed_tk
         pillow_image_postcompress = Image.fromarray(compressed).resize((1000, 1000))
 
-        count = 0
-        for centroid in centroids:
-            if count > 5:
-                break
-
-            centroid_color = ImageTk.PhotoImage(
-                Image.new(
-                    mode='RGB',
-                    size=(50, 50),
-                    color=tuple(centroid)
-                )
-            )
-            color_boxes[count].config(image=centroid_color)
-            color_boxes[count].image = centroid_color
-            color_texts[count].set(f"#{centroid[0]:02x}{centroid[1]:02x}{centroid[2]:02x}")
-
-            count += 1
+        reset_colors()
+        set_colors(centroids, percents, k)
 
 
 def save():
@@ -167,7 +201,6 @@ confirm_button = Button(
 )
 
 # color boxes to show user (up to) 6 colors in photo
-# todo: maybe make this scroll to match user k
 color_box_label = Label(
     root,
     bg=back_col,
@@ -183,6 +216,28 @@ color_text_labels = [
     )
     for i in range(6)
 ]
+
+percent_texts = [StringVar() for _ in range(6)]
+percent_text_labels = [
+    Label(
+        root,
+        bg=back_col,
+        textvariable=percent_texts[i]
+    )
+    for i in range(6)
+]
+remaining_percent = StringVar()
+remaining_percent_label = Label(
+    root,
+    bg=back_col,
+    textvariable=remaining_percent
+)
+remaining_explain = StringVar()
+remaining_explain_label = Label(
+    root,
+    bg=back_col,
+    textvariable=remaining_explain
+)
 
 # grid ---------------------------------------------------------------------------------------
 # images
@@ -209,6 +264,10 @@ color_box_label.grid(column=1, row=5, columnspan=6, pady=(1, 4))
 for i in range(6):
     color_boxes[i].grid(column=i + 1, row=6)
     color_text_labels[i].grid(column=i + 1, row=7)
+    percent_text_labels[i].grid(column=i + 1, row=8)
+
+remaining_explain_label.grid(column=7, row=7)
+remaining_percent_label.grid(column=7, row=8)
 
 
 # spacing on outsides
