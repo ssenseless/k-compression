@@ -100,15 +100,16 @@ def save():
     path = filedialog.asksaveasfilename(
         initialdir='/',
         title='Select a save location',
-        confirmoverwrite=False,
+        confirmoverwrite=True,
         filetypes=[
             ('Image files', '.jpg')
-        ]
+        ],
+        defaultextension = "*.*"
     )
     if path == '':
         flavor_text.set("Must select directory location")
     else:
-        pillow_image_postcompress.save(path + '.jpg')
+        pillow_image_postcompress.save(path)
         flavor_text.set("Saved!")
 
 
