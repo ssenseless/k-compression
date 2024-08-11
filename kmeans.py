@@ -112,7 +112,7 @@ def find_k_means(data: np.ndarray, initial_centroids: np.ndarray, max_iters=10) 
     :param max_iters: maximal number of iterations that the algorithm will take before stopping
                       (max_iters is the only stopping condition for this function as there is no
                       epsilon/delta termination functionality)
-    :return: k centroids (colors), and the indices of the pixels associated with them
+    :return: k centroids (colors)
     """
     centroids = initial_centroids
 
@@ -121,7 +121,7 @@ def find_k_means(data: np.ndarray, initial_centroids: np.ndarray, max_iters=10) 
         idx = find_closest_centroids(data, centroids)
         centroids = compute_centroids(data=data, idx=idx, k=initial_centroids.shape[0])
 
-    return centroids, idx
+    return centroids
 
 
 def initialize_rand_centroids(data: np.ndarray, k: int) -> np.ndarray:
@@ -134,13 +134,14 @@ def initialize_rand_centroids(data: np.ndarray, k: int) -> np.ndarray:
     return data[np.random.permutation(data.shape[0])[:k]]
 
 
-def process_image(image: Image, is_jpg: bool, k: int) -> (np.ndarray, np.ndarray, list):
+def process_image(image_unsized: Image, image_sized: Image, is_jpg: bool, k: int) -> (np.ndarray, np.ndarray, list):
     """
     given an image, return six centroids, the percentage of
     the image that they make up, and the image (as an array)
     with the centroid colors replacing their respective pixels
     (this function is the entry point for the file)
-    :param image: a pillow Image containing all pixel data, height, width, etc...
+    :param image_unsized: a pillow Image (unsized for replacement) containing all pixel data, height, width, etc...
+    :param image_sized: a pillow Image (sized for centroids {speed}) containing all pixel data, height, width, etc...
     :param is_jpg: whether the image is a .jpg or .png file (.png colormaps are already 0 - 1)
     :param k: number of centroids (colors) to compress image into
     :return:
@@ -149,17 +150,20 @@ def process_image(image: Image, is_jpg: bool, k: int) -> (np.ndarray, np.ndarray
              the centroids respective percentage of the image
     """
     # need numpy goodness instead of whatever pillow offers
-    processing = np.array(image)
+    processing = np.array(image_sized)
+    processing_unsized = np.array(image_unsized)
 
     # .png colormaps are 0 - 1 scaled already
     if is_jpg:
         processing = processing / 255
+        processing_unsized = processing_unsized / 255
 
     # turn 2d image into height * width list of pixels
     processing_reshape = np.reshape(processing, (processing.shape[0] * processing.shape[1], 3))
+    unsized_reshape = np.reshape(processing_unsized, (processing_unsized.shape[0] * processing_unsized.shape[1], 3))
 
     # get the centroids, map the original pixels to a centroid, reshape back into a 2d image
-    centroids, idx = find_k_means(
+    centroids = find_k_means(
         data=processing_reshape,
         initial_centroids=initialize_rand_centroids(
             data=processing_reshape,
@@ -167,7 +171,8 @@ def process_image(image: Image, is_jpg: bool, k: int) -> (np.ndarray, np.ndarray
         ),
         max_iters=10
     )
-    processed = np.uint8(np.reshape(centroids[idx, :], processing.shape) * 255)
+    idx = find_closest_centroids(data=unsized_reshape, centroids=centroids)
+    processed = np.uint8(np.reshape(centroids[idx, :], processing_unsized.shape) * 255)
 
     # quickly grab the top six centroids and their percentage of the image
     centroids, percents = top_centroid_percent(idx, centroids)

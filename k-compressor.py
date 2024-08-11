@@ -26,12 +26,12 @@ def choose_file() -> None:
         flavor_text.set('Must select either .png or .jpg')
 
 
-def resize_image() -> Image:
+def resize_image(unaltered: Image) -> Image:
     """
     helper function to resize images and retain aspect ratio
+    :param unaltered: unsized image
     :return: resized image
     """
-    unaltered = Image.open(fp=filename)
     aspect = 300 / max(unaltered.height, unaltered.width)
 
     return unaltered.resize(
@@ -106,20 +106,37 @@ def compress() -> None:
     elif k == 0:
         flavor_text.set('Color number must be greater than zero')
     else:
-        global pillow_image_postcompress  # once again not entirely sure why this one has to be here
+        # once again not entirely sure why these two specifically need to be here
+        global pillow_image_postcompress
+        global image_to_save
         
         # get user selected image, resize, run kmeans, update application with helper functions
-        choice = resize_image()
-        compressed, centroids, percents = process_image(choice, filename[-3:] == 'jpg', k)
+        choice = Image.open(fp=filename)
+        choice_resized = resize_image(choice)
+        compressed, centroids, percents = process_image(
+            image_unsized=choice,
+            image_sized=choice_resized,
+            is_jpg=filename[-3:] == 'jpg',
+            k=k
+        )
 
-        choice_tk = ImageTk.PhotoImage(choice)
+        image_to_save = Image.fromarray(compressed)
+
+        choice_tk = ImageTk.PhotoImage(choice_resized)
         precompress_frame.config(image=choice_tk)
         precompress_frame.image = choice_tk
 
-        compressed_tk = ImageTk.PhotoImage(Image.fromarray(compressed))
+        compressed_tk = ImageTk.PhotoImage(
+            image_to_save.resize(
+                size=(
+                    choice_resized.width,
+                    choice_resized.height
+                )
+            )
+        )
         postcompress_frame.config(image=compressed_tk)
         postcompress_frame.image = compressed_tk
-        pillow_image_postcompress = Image.fromarray(compressed).resize((1000, 1000))
+        pillow_image_postcompress = Image.fromarray(compressed)
 
         reset_colors()
         set_colors(centroids, percents, k)
@@ -127,9 +144,8 @@ def compress() -> None:
 
 def save() -> None:
     """
-    allow users to save compressed photos as 1000x1000 .jpg or .png
+    allow users to save compressed photos as .jpg or .png
     """
-    # todo: allow user to resize image to specifications? aspect ratio?
     path = filedialog.asksaveasfilename(
         initialdir='/',
         title='Select a save location',
@@ -144,13 +160,14 @@ def save() -> None:
     if path == '':
         flavor_text.set("Must select directory location")
     else:
-        pillow_image_postcompress.save(path)
+        image_to_save.save(path)
         flavor_text.set("Saved!")
 
 
 # globals ------------------------------------------------------------------------------------
 back_col = '#343434'
 filename = ''
+image_to_save = None
 
 # simple initializers ------------------------------------------------------------------------
 root = Tk()
