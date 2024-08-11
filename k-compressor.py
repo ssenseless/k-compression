@@ -26,13 +26,13 @@ def choose_file() -> None:
         flavor_text.set('Must select either .png or .jpg')
 
 
-def resize_image(unaltered: Image) -> Image:
+def resize_image(unaltered: Image, bound: int) -> Image:
     """
     helper function to resize images and retain aspect ratio
     :param unaltered: unsized image
     :return: resized image
     """
-    aspect = 300 / max(unaltered.height, unaltered.width)
+    aspect = bound / max(unaltered.height, unaltered.width)
 
     return unaltered.resize(
         size=(
@@ -112,9 +112,12 @@ def compress() -> None:
         
         # get user selected image, resize, run kmeans, update application with helper functions
         choice = Image.open(fp=filename)
-        choice_resized = resize_image(choice)
+        choice_resized = resize_image(unaltered=choice, bound=300)
         compressed, centroids, percents = process_image(
-            image_unsized=choice,
+            image_unsized=resize_image(
+                unaltered=choice,
+                bound=min(1000, min(choice.height, choice.width))
+            ),
             image_sized=choice_resized,
             is_jpg=filename[-3:] == 'jpg',
             k=k
